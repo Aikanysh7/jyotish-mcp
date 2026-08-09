@@ -26,4 +26,4 @@ may apply; see your hosting provider's policy.
 
 ## Contact
 
-Questions: aikanysh@gmail.com
+Questions: please open an issue on the project's GitHub repository.

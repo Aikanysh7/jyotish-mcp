@@ -1,125 +1,103 @@
-# jyotish_mcp — ведическая астрология для Claude
+# jyotish-mcp
 
-MCP-сервер, который считает ведическую карту рождения (джйотиш) по швейцарским
-эфемеридам. Claude вызывает инструменты и делает интерпретацию.
+**A Vedic astrology (Jyotish) MCP server for Claude.** Precise Swiss-Ephemeris
+calculations — birth chart, divisional charts, Vimshottari dashas, transits,
+Ashtakavarga — exposed as tools so the model interprets real data instead of
+inventing planetary positions.
 
-Точность проверена по профессиональному джйотиш-софту: позиции планет
-совпадают до угловых секунд, даты даш — день в день, аштакаварга — бинду в бинду.
+LLMs are good at interpretation and bad at ephemeris arithmetic: ask any chatbot
+for a chart and it will confidently hallucinate degrees, nakshatras and dasha
+dates. This server closes that gap.
 
-## Инструменты
+## Try it (no installation)
 
-| Инструмент | Что делает |
+Add it in Claude: **Settings → Connectors → Add custom connector**
+
+```
+https://jyotish-mcp-h6px.onrender.com/mcp
+```
+
+Then just ask, in any language:
+
+> Analyse my chart: 3 May 1986, 09:15, Bishkek
+
+Claude resolves the city, applies the historically correct timezone, computes
+everything and writes the reading. *(Free hosting tier — the first request after
+idle time may take ~50 s to wake up.)*
+
+## Tools
+
+| Tool | What it returns |
 |---|---|
-| `jyotish_find_place` | Координаты и часовой пояс по названию города (офлайн-база) |
-| `jyotish_compute_chart` | Карта D1+D9: лагна, планеты, накшатры, достоинства, варготтама, караки Джаймини, йоги (Махапуруши, Гаджакесари, йогакарака, нича-бханга, кемадрума) |
-| `jyotish_vimshottari_dasha` | Вимшоттари-даша: махадаши, антардаши, пратьянтардаши, активный период на любую дату |
-| `jyotish_current_transits` | Транзиты на дату: дома от лагны и Луны, Саде Сати, возврат Сатурна |
-| `jyotish_ashtakavarga` | Аштакаварга: BAV всех планет + SAV по знакам и домам |
-| `jyotish_divisional_chart` | Дробные карты: D2 (богатство), D3 (братья), D7 (дети), D9 (брак), D10 (карьера), D12 (родители) |
+| `jyotish_find_place` | Coordinates + IANA timezone for a city (offline database) |
+| `jyotish_compute_chart` | D1 + D9: ascendant, 9 grahas, nakshatras & padas, dignity, vargottama, retrogradation, five-fold relationship with dispositor, Jaimini karakas, yogas (Mahapurusha, Gajakesari, yogakaraka, neecha bhanga, Kemadruma) |
+| `jyotish_vimshottari_dasha` | Maha / antar / pratyantar dashas, active period for any date |
+| `jyotish_current_transits` | Transit positions by house from lagna and Moon, Sade Sati phase, Saturn return |
+| `jyotish_ashtakavarga` | BAV per planet + SAV per sign and per house |
+| `jyotish_divisional_chart` | D2, D3, D7, D9, D10, D12 |
 
-Плюс промпт `jyotish_full_analysis` — готовый сценарий полного разбора.
+Two prompts are included: `jyotish_full_analysis` and `jyotish_short_reading`.
+Presentation rules are embedded in the tool descriptions, so readings come out
+as prose with every term explained — not as a data dump.
 
-Часовой пояс на дату рождения определяется автоматически по базе IANA —
-включая исторические правила (советское декретное и летнее время и т.п.).
-Достаточно передать `timezone` из `jyotish_find_place`.
+## Conventions & accuracy
 
-## Установка — шаг за шагом (macOS)
+Sidereal zodiac, **Lahiri** ayanamsa · **whole-sign** houses · **true** nodes ·
+Swiss Ephemeris (Moshier model, no data files needed).
 
-### Шаг 1. Распакуйте архив в постоянную папку
+Verified against professional Jyotish software on independent charts: planetary
+positions match to arc-seconds, dasha boundaries to the day, Ashtakavarga bindu
+for bindu (SAV always sums to 337 — a built-in sanity check).
 
-Например, в `Документы`:
+Historical timezones come from the IANA database, so Soviet decree/summer time
+and similar rules are applied automatically — the single most common source of
+wrong charts.
 
-```
-~/Documents/jyotish_mcp/
-```
+## Self-hosting
 
-Важно: не оставляйте в «Загрузках» — если папку удалить или переместить,
-коннектор перестанет работать.
-
-### Шаг 2. Установите зависимости
-
-Откройте Терминал (Cmd+Пробел → «Terminal») и выполните:
+Remote (Docker / Render / any PaaS):
 
 ```bash
-cd ~/Documents/jyotish_mcp
-pip3 install -r requirements.txt
+docker build -t jyotish-mcp . && docker run -p 8000:8000 jyotish-mcp
+# endpoint: http://localhost:8000/mcp
 ```
 
-Если `pip3` не найден — установите Python с https://www.python.org/downloads/
-(любая версия 3.10+), затем повторите.
+Local (stdio, Claude Desktop): `pip install -r requirements.txt && python server.py`
+— then add it to `claude_desktop_config.json`. See `DEPLOY.md`.
 
-Проверьте, что сервер запускается (ошибок быть не должно; остановить — Ctrl+C):
+## Limitations
 
-```bash
-python3 server.py
-```
+Shad-bala is not implemented. Rahu/Ketu are excluded from the planetary
+relationship calculation (traditions differ). Divisional charts are limited to
+the six listed. The public endpoint has no authentication — anyone with the URL
+can use it; no birth data is stored or logged (see `PRIVACY.md`).
 
-### Шаг 3. Узнайте точный путь к Python
+Charts with an ascendant in the first or last degrees of a sign are sensitive to
+birth-time accuracy; the server flags this so the model can warn the user.
 
-```bash
-which python3
-```
+## Disclaimer
 
-Запомните вывод (например `/usr/bin/python3` или `/opt/homebrew/bin/python3`).
+This is an interpretation within the Jyotish tradition, not a scientific
+forecast. Nothing here should be used as medical, legal or financial advice.
 
-### Шаг 4. Добавьте сервер в конфиг Claude Desktop
+## License
 
-В приложении Claude: меню **Claude → Settings → Developer → Edit Config**.
-Откроется файл `claude_desktop_config.json`
-(лежит в `~/Library/Application Support/Claude/`).
+MIT
 
-Вставьте (подставьте свои пути из шагов 1 и 3; если файл не пустой —
-добавьте блок `"jyotish"` внутрь существующего `"mcpServers"`):
+---
 
-```json
-{
-  "mcpServers": {
-    "jyotish": {
-      "command": "/usr/bin/python3",
-      "args": ["/Users/ВАШЕ_ИМЯ/Documents/jyotish_mcp/server.py"]
-    }
-  }
-}
-```
+## По-русски
 
-Путь должен быть полным, без `~`. Узнать имя пользователя: `whoami` в Терминале.
+MCP-сервер для ведической астрологии: считает карту рождения, дроби, периоды
+Вимшоттари, транзиты и аштакаваргу по швейцарским эфемеридам, а Claude делает
+интерпретацию. Айанамша Лахири, дома whole sign, истинные узлы.
 
-### Шаг 5. Перезапустите Claude полностью
+Подключение без установки: **Settings → Connectors → Add custom connector** и
+адрес `https://jyotish-mcp-h6px.onrender.com/mcp`. Дальше достаточно написать
+в чат: «Разбери карту: 3 мая 1986, 09:15, Бишкек» — город, исторический
+часовой пояс и все расчёты подставятся сами.
 
-Cmd+Q (не просто закрыть окно), затем откройте заново.
+Точность сверена с профессиональным джйотиш-софтом на независимых картах:
+позиции до угловых секунд, даты периодов день в день, аштакаварга бинду в бинду.
 
-### Шаг 6. Проверьте
-
-В новом чате нажмите иконку инструментов (ползунки/молоточек под полем ввода) —
-в списке должен появиться сервер **jyotish** с шестью инструментами.
-Напишите:
-
-> Разбери мою карту: 3 мая 1986, 09:15, Бишкек
-
-Claude сам найдёт город, определит исторический пояс (+7 для СССР летом 1986),
-посчитает карту и даст разбор.
-
-## Если что-то не работает
-
-- **Сервер не появился в списке** — проверьте JSON на опечатки (лишняя запятая —
-  самая частая ошибка), путь к `server.py` и полный перезапуск через Cmd+Q.
-- **"spawn python3 ENOENT"** — в `command` укажите полный путь из `which python3`.
-- **"ModuleNotFoundError: mcp"** — зависимости установились в другой Python.
-  Выполните `pip3 install -r requirements.txt` ещё раз тем же python, что указан
-  в конфиге: `/usr/bin/python3 -m pip install -r requirements.txt`.
-- **Логи**: `~/Library/Logs/Claude/mcp-server-jyotish.log`.
-
-### Windows
-
-Конфиг: `%APPDATA%\Claude\claude_desktop_config.json`, команда — `"python"`,
-путь вида `"C:\\Users\\Имя\\Documents\\jyotish_mcp\\server.py"`.
-
-## Ограничения
-
-- Лагна в первых/последних 2° знака чувствительна к точности времени рождения.
-- Раху/Кету — истинные узлы; айанамша — Лахири; дома — whole sign.
-- Шад-бала пока не считается (сложная составная формула — в планах).
-- База городов — офлайн, населённые пункты от 15 тыс. жителей; для сёл
-  передавайте координаты и timezone вручную.
-
-Астрологический разбор — интерпретация традиции, а не научный прогноз.
+Разбор — интерпретация в рамках традиции, а не научный прогноз.
