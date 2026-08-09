@@ -1,27 +1,27 @@
 """Jyotish (Vedic astrology) computation core.
-
+ 
 Sidereal zodiac (Lahiri ayanamsa), whole-sign houses, Vimshottari dasha.
 Uses Swiss Ephemeris (Moshier model — no ephemeris files needed).
 """
 from __future__ import annotations
-
+ 
 import datetime as dt
 from typing import Optional
-
+ 
 import swisseph as swe
-
+ 
 swe.set_sid_mode(swe.SIDM_LAHIRI)
-
+ 
 FLAGS = swe.FLG_MOSEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
-
+ 
 SIGNS_EN = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
             "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
 SIGNS_RU = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева",
             "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
-
+ 
 SIGN_LORDS = ["Mars", "Venus", "Mercury", "Moon", "Sun", "Mercury",
               "Venus", "Mars", "Jupiter", "Saturn", "Saturn", "Jupiter"]
-
+ 
 NAKSHATRAS = [
     "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
     "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
@@ -30,18 +30,18 @@ NAKSHATRAS = [
     "Purva Bhadrapada", "Uttara Bhadrapada", "Revati",
 ]
 NAKSHATRA_LORDS = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
-
+ 
 # Vimshottari dasha: lord -> years, in natural order starting from Ketu
 DASHA_ORDER = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
 DASHA_YEARS = {"Ketu": 7, "Venus": 20, "Sun": 6, "Moon": 10, "Mars": 7,
                "Rahu": 18, "Jupiter": 16, "Saturn": 19, "Mercury": 17}
 YEAR_DAYS = 365.25
-
+ 
 PLANETS = {
     "Sun": swe.SUN, "Moon": swe.MOON, "Mars": swe.MARS, "Mercury": swe.MERCURY,
     "Jupiter": swe.JUPITER, "Venus": swe.VENUS, "Saturn": swe.SATURN,
 }
-
+ 
 EXALTATION = {"Sun": 0, "Moon": 1, "Mars": 9, "Mercury": 5, "Jupiter": 3, "Venus": 11, "Saturn": 6}
 DEBILITATION = {p: (s + 6) % 12 for p, s in EXALTATION.items()}
 OWN_SIGNS = {
@@ -49,15 +49,15 @@ OWN_SIGNS = {
     "Jupiter": [8, 11], "Venus": [1, 6], "Saturn": [9, 10],
 }
 MOOLATRIKONA = {"Sun": 4, "Moon": 1, "Mars": 0, "Mercury": 5, "Jupiter": 8, "Venus": 6, "Saturn": 10}
-
+ 
 # Yogakaraka planet by lagna sign index
 YOGAKARAKA = {3: "Mars", 4: "Mars", 1: "Saturn", 6: "Saturn", 9: "Venus", 10: "Venus"}
-
+ 
 KARAKA_NAMES = ["Atma Karaka (AK)", "Amatya Karaka (AmK)", "Bhratri Karaka (BK)",
                 "Matri Karaka (MK)", "Putra Karaka (PK)", "Gnati Karaka (GK)",
                 "Dara Karaka (DK)"]
-
-
+ 
+ 
 def _dms(deg: float) -> str:
     d = int(deg)
     m = int((deg - d) * 60)
@@ -69,21 +69,21 @@ def _dms(deg: float) -> str:
         m = 0
         d += 1
     return f"{d}°{m:02d}'{s:02d}\""
-
-
+ 
+ 
 def julian_day(date_str: str, time_str: str, utc_offset: float) -> float:
     """Local date/time + UTC offset -> Julian day (UT)."""
     local = dt.datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
     ut = local - dt.timedelta(hours=utc_offset)
     return swe.julday(ut.year, ut.month, ut.day,
                       ut.hour + ut.minute / 60.0 + ut.second / 3600.0)
-
-
+ 
+ 
 def jd_to_date(jd: float) -> str:
     y, m, d, h = swe.revjul(jd)
     return f"{y:04d}-{m:02d}-{d:02d}"
-
-
+ 
+ 
 def nakshatra_of(lon: float) -> dict:
     span = 360.0 / 27.0
     idx = int(lon // span)
@@ -92,15 +92,15 @@ def nakshatra_of(lon: float) -> dict:
     lord = NAKSHATRA_LORDS[idx % 9]
     return {"name": NAKSHATRAS[idx], "pada": pada, "lord": lord,
             "fraction_traversed": within / span}
-
-
+ 
+ 
 def navamsa_sign(lon: float) -> int:
     sign = int(lon // 30)
     deg_in_sign = lon - sign * 30
     part = int(deg_in_sign // (30.0 / 9.0))
     return (sign * 9 + part) % 12
-
-
+ 
+ 
 def dignity_of(planet: str, sign: int) -> str:
     if planet not in EXALTATION:
         return "-"
@@ -111,13 +111,13 @@ def dignity_of(planet: str, sign: int) -> str:
     if sign in OWN_SIGNS[planet]:
         return "own sign"
     return "neutral"
-
-
+ 
+ 
 def compute_positions(jd: float, lat: float, lon: float) -> dict:
     """Sidereal longitudes of lagna and 9 grahas."""
     cusps, ascmc = swe.houses_ex(jd, lat, lon, b"W", FLAGS)
     asc = ascmc[0] % 360.0
-
+ 
     positions = {"Ascendant": {"lon": asc, "retrograde": False}}
     for name, pid in PLANETS.items():
         xx, _ = swe.calc_ut(jd, pid, FLAGS)
@@ -127,15 +127,15 @@ def compute_positions(jd: float, lat: float, lon: float) -> dict:
     positions["Rahu"] = {"lon": rahu, "retrograde": True}
     positions["Ketu"] = {"lon": (rahu + 180.0) % 360.0, "retrograde": True}
     return positions
-
-
+ 
+ 
 def build_chart(date_str: str, time_str: str, utc_offset: float,
                 lat: float, lon: float, place: str = "") -> dict:
     jd = julian_day(date_str, time_str, utc_offset)
     pos = compute_positions(jd, lat, lon)
     asc_lon = pos["Ascendant"]["lon"]
     asc_sign = int(asc_lon // 30)
-
+ 
     bodies = {}
     for name, p in pos.items():
         lon_p = p["lon"]
@@ -154,12 +154,19 @@ def build_chart(date_str: str, time_str: str, utc_offset: float,
             "dignity": dignity_of(name, sign),
             "longitude": round(lon_p, 4),
         }
-
+ 
+    # Five-fold relationship (pancha-dha maitri) with each planet's dispositor
+    _signs = {p: bodies[p]["sign_index"] for p in PLANETS}
+    for p in PLANETS:
+        rel = relationship_with_dispositor(p, _signs[p], _signs)
+        if rel:
+            bodies[p]["relationship_with_dispositor"] = rel
+ 
     # Jaimini karakas: 7 planets by degree-in-sign descending (Rahu excluded, 7-karaka scheme)
     ranked = sorted(PLANETS.keys(),
                     key=lambda n: bodies[n]["degree_in_sign"], reverse=True)
     karakas = {KARAKA_NAMES[i]: ranked[i] for i in range(7)}
-
+ 
     chart = {
         "input": {"date": date_str, "time": time_str, "utc_offset": utc_offset,
                   "latitude": lat, "longitude": lon, "place": place,
@@ -171,12 +178,12 @@ def build_chart(date_str: str, time_str: str, utc_offset: float,
         "yogas": detect_yogas(bodies, asc_sign),
     }
     return chart
-
-
+ 
+ 
 def detect_yogas(bodies: dict, asc_sign: int) -> dict:
     yogas = {}
     kendra_houses = {1, 4, 7, 10}
-
+ 
     # Mahapurusha yogas
     mp_names = {"Mars": "Ruchaka", "Mercury": "Bhadra", "Jupiter": "Hamsa",
                 "Venus": "Malavya", "Saturn": "Shasha"}
@@ -187,13 +194,13 @@ def detect_yogas(bodies: dict, asc_sign: int) -> dict:
             found.append({"yoga": f"{yname} (Mahapurusha)", "planet": planet,
                           "detail": f"{planet} in {b['sign']} ({b['dignity']}) in house {b['house']}"})
     yogas["mahapurusha"] = found
-
+ 
     # Gajakesari: Jupiter in kendra from Moon
     moon_sign = bodies["Moon"]["sign_index"]
     jup_sign = bodies["Jupiter"]["sign_index"]
     diff = (jup_sign - moon_sign) % 12
     yogas["gajakesari"] = diff in (0, 3, 6, 9)
-
+ 
     # Yogakaraka
     yk = YOGAKARAKA.get(asc_sign)
     if yk:
@@ -202,7 +209,7 @@ def detect_yogas(bodies: dict, asc_sign: int) -> dict:
                                "dignity": b["dignity"], "retrograde": b["retrograde"]}
     else:
         yogas["yogakaraka"] = None
-
+ 
     # Debilitated planets + neecha bhanga conditions (simplified classical checks)
     nb = []
     for planet in PLANETS:
@@ -223,23 +230,23 @@ def detect_yogas(bodies: dict, asc_sign: int) -> dict:
                    "neecha_bhanga_conditions": conds,
                    "neecha_bhanga": len(conds) > 0})
     yogas["debilitations"] = nb
-
+ 
     # Kemadruma check (no planets in 2nd/12th from Moon, excluding Sun/nodes)
     moon = bodies["Moon"]["sign_index"]
     flanks = {(moon + 1) % 12, (moon - 1) % 12}
     has_flank = any(bodies[p]["sign_index"] in flanks
                     for p in ["Mars", "Mercury", "Jupiter", "Venus", "Saturn"])
     yogas["kemadruma"] = not has_flank
-
+ 
     return yogas
-
-
+ 
+ 
 def vimshottari_dasha(date_str: str, time_str: str, utc_offset: float,
                       lat: float, lon: float,
                       target_date: Optional[str] = None,
                       levels: int = 3) -> dict:
     """Vimshottari dasha tree.
-
+ 
     Returns all mahadashas, antardashas of every mahadasha, and
     pratyantardashas for the period containing target_date (default: today).
     """
@@ -247,17 +254,17 @@ def vimshottari_dasha(date_str: str, time_str: str, utc_offset: float,
     pos = compute_positions(jd_birth, lat, lon)
     moon_lon = pos["Moon"]["lon"]
     nak = nakshatra_of(moon_lon)
-
+ 
     start_lord = nak["lord"]
     start_idx = DASHA_ORDER.index(start_lord)
     balance = (1.0 - nak["fraction_traversed"]) * DASHA_YEARS[start_lord]
-
+ 
     if target_date is None:
         target_jd = swe.julday(*dt.date.today().timetuple()[:3], 12.0)
     else:
         td = dt.datetime.strptime(target_date, "%Y-%m-%d")
         target_jd = swe.julday(td.year, td.month, td.day, 12.0)
-
+ 
     def sub_periods(lord: str, start_jd: float, span_years: float):
         """Split a period into 9 sub-periods starting from its own lord."""
         idx = DASHA_ORDER.index(lord)
@@ -269,7 +276,7 @@ def vimshottari_dasha(date_str: str, time_str: str, utc_offset: float,
             out.append({"lord": sub, "start_jd": cur, "years": span})
             cur += span * YEAR_DAYS
         return out
-
+ 
     # Mahadashas
     mahadashas = []
     cur = jd_birth
@@ -282,7 +289,7 @@ def vimshottari_dasha(date_str: str, time_str: str, utc_offset: float,
         mahadashas.append({"lord": lord, "start_jd": cur, "years": span,
                            "full_start_jd": md_start_full, "full_years": full})
         cur += span * YEAR_DAYS
-
+ 
     result_md = []
     current = {}
     for md in mahadashas:
@@ -319,15 +326,15 @@ def vimshottari_dasha(date_str: str, time_str: str, utc_offset: float,
         if md["start_jd"] <= target_jd < md_end:
             entry["active_on_target_date"] = True
         result_md.append(entry)
-
+ 
     return {
         "moon_nakshatra": nak["name"], "moon_nakshatra_lord": start_lord,
         "balance_of_first_dasha_years": round(balance, 3),
         "current_period": current,
         "mahadashas": result_md,
     }
-
-
+ 
+ 
 def current_transits(date_str: str, time_str: str, utc_offset: float,
                      lat: float, lon: float,
                      on_date: Optional[str] = None) -> dict:
@@ -336,14 +343,14 @@ def current_transits(date_str: str, time_str: str, utc_offset: float,
     natal = compute_positions(jd_birth, lat, lon)
     asc_sign = int(natal["Ascendant"]["lon"] // 30)
     moon_sign = int(natal["Moon"]["lon"] // 30)
-
+ 
     if on_date is None:
         today = dt.date.today()
         jd_t = swe.julday(today.year, today.month, today.day, 12.0)
     else:
         td = dt.datetime.strptime(on_date, "%Y-%m-%d")
         jd_t = swe.julday(td.year, td.month, td.day, 12.0)
-
+ 
     transits = {}
     for name, pid in list(PLANETS.items()):
         xx, _ = swe.calc_ut(jd_t, pid, FLAGS)
@@ -366,12 +373,12 @@ def current_transits(date_str: str, time_str: str, utc_offset: float,
             "house_from_lagna": (sign - asc_sign) % 12 + 1,
             "house_from_moon": (sign - moon_sign) % 12 + 1,
         }
-
+ 
     sat_from_moon = transits["Saturn"]["house_from_moon"]
     sade_sati = {12: "phase 1 (rising, Saturn in 12th from Moon)",
                  1: "phase 2 (peak, Saturn over natal Moon)",
                  2: "phase 3 (setting, Saturn in 2nd from Moon)"}.get(sat_from_moon)
-
+ 
     return {
         "date": jd_to_date(jd_t),
         "natal_moon_sign": SIGNS_EN[moon_sign],
@@ -380,8 +387,8 @@ def current_transits(date_str: str, time_str: str, utc_offset: float,
         "sade_sati": {"active": sade_sati is not None, "phase": sade_sati},
         "saturn_return": transits["Saturn"]["sign"] == SIGNS_EN[int(natal["Saturn"]["lon"] // 30)],
     }
-
-
+ 
+ 
 # ---------------------------------------------------------------------------
 # Ashtakavarga (Parashari bindu tables)
 # For each planet's BAV: houses (counted from each contributor's natal sign)
@@ -433,8 +440,8 @@ BAV_TABLES = {
         "Saturn": [3, 5, 6, 11], "Asc": [1, 3, 4, 6, 10, 11],
     },
 }
-
-
+ 
+ 
 def ashtakavarga(date_str: str, time_str: str, utc_offset: float,
                  lat: float, lon: float) -> dict:
     """Bhinnashtakavarga (BAV) for the 7 planets and Sarvashtakavarga (SAV)."""
@@ -443,7 +450,7 @@ def ashtakavarga(date_str: str, time_str: str, utc_offset: float,
     ref_signs = {p: int(pos[p]["lon"] // 30) for p in PLANETS}
     ref_signs["Asc"] = int(pos["Ascendant"]["lon"] // 30)
     asc_sign = ref_signs["Asc"]
-
+ 
     bav = {}
     for planet, table in BAV_TABLES.items():
         per_sign = [0] * 12
@@ -456,7 +463,7 @@ def ashtakavarga(date_str: str, time_str: str, utc_offset: float,
             "in_own_sign": per_sign[ref_signs[planet]],
             "total": sum(per_sign),
         }
-
+ 
     sav = [sum(bav[p]["bindus_by_sign"][SIGNS_EN[i]] for p in BAV_TABLES)
            for i in range(12)]
     return {
@@ -469,8 +476,8 @@ def ashtakavarga(date_str: str, time_str: str, utc_offset: float,
         "note": ("SAV: >28 bindus in a sign = strong area; <25 = weak. "
                  "BAV of a planet in its sign: >=5 strong, <=3 weak. Total is always 337."),
     }
-
-
+ 
+ 
 # ---------------------------------------------------------------------------
 # Divisional charts (vargas)
 # ---------------------------------------------------------------------------
@@ -479,7 +486,7 @@ def varga_sign(lon: float, varga: str) -> int:
     sign = int(lon // 30)
     deg = lon - sign * 30
     odd = sign % 2 == 0  # Aries=0 is odd sign in astrology terms
-
+ 
     if varga == "D1":
         return sign
     if varga == "D2":  # hora: halves belong to Leo (Sun) / Cancer (Moon)
@@ -502,15 +509,15 @@ def varga_sign(lon: float, varga: str) -> int:
         part = int(deg // 2.5)
         return (sign + part) % 12
     raise ValueError(f"Unsupported varga: {varga}. Use D1,D2,D3,D7,D9,D10,D12")
-
-
+ 
+ 
 VARGA_MEANINGS = {
     "D2": "wealth (hora)", "D3": "siblings, courage (drekkana)",
     "D7": "children (saptamsha)", "D9": "marriage, dharma (navamsha)",
     "D10": "career, public deeds (dashamsha)", "D12": "parents (dwadashamsha)",
 }
-
-
+ 
+ 
 def divisional_chart(date_str: str, time_str: str, utc_offset: float,
                      lat: float, lon: float, varga: str) -> dict:
     """Positions of lagna and all grahas in a divisional chart."""
@@ -518,7 +525,7 @@ def divisional_chart(date_str: str, time_str: str, utc_offset: float,
     jd = julian_day(date_str, time_str, utc_offset)
     pos = compute_positions(jd, lat, lon)
     v_asc = varga_sign(pos["Ascendant"]["lon"], varga)
-
+ 
     placements = {}
     for name in list(PLANETS) + ["Rahu", "Ketu"]:
         v_sign = varga_sign(pos[name]["lon"], varga)
@@ -533,3 +540,62 @@ def divisional_chart(date_str: str, time_str: str, utc_offset: float,
         "ascendant": {"sign": SIGNS_EN[v_asc], "sign_ru": SIGNS_RU[v_asc]},
         "planets": placements,
     }
+ 
+ 
+# ---------------------------------------------------------------------------
+# Pancha-dha maitri — five-fold planetary relationship with the dispositor
+# (natural + temporal). Nodes are excluded: traditions differ on their scheme.
+# ---------------------------------------------------------------------------
+NATURAL_FRIENDS = {
+    "Sun": ["Moon", "Mars", "Jupiter"],
+    "Moon": ["Sun", "Mercury"],
+    "Mars": ["Sun", "Moon", "Jupiter"],
+    "Mercury": ["Sun", "Venus"],
+    "Jupiter": ["Sun", "Moon", "Mars"],
+    "Venus": ["Mercury", "Saturn"],
+    "Saturn": ["Mercury", "Venus"],
+}
+NATURAL_ENEMIES = {
+    "Sun": ["Venus", "Saturn"],
+    "Moon": [],
+    "Mars": ["Mercury"],
+    "Mercury": ["Moon"],
+    "Jupiter": ["Mercury", "Venus"],
+    "Venus": ["Sun", "Moon"],
+    "Saturn": ["Sun", "Moon", "Mars"],
+}
+ 
+ 
+def _natural_relation(a: str, b: str) -> int:
+    """+1 friend, 0 neutral, -1 enemy (as seen from planet a)."""
+    if b in NATURAL_FRIENDS.get(a, []):
+        return 1
+    if b in NATURAL_ENEMIES.get(a, []):
+        return -1
+    return 0
+ 
+ 
+def _temporal_relation(sign_a: int, sign_b: int) -> int:
+    """Temporal friendship: houses 2,3,4,10,11,12 from a planet are friendly."""
+    house = (sign_b - sign_a) % 12 + 1
+    return 1 if house in (2, 3, 4, 10, 11, 12) else -1
+ 
+ 
+COMPOUND = {2: "great friend", 1: "friend", 0: "neutral", -1: "enemy", -2: "great enemy"}
+COMPOUND_RU = {2: "Большой друг", 1: "Друг", 0: "Нейтрально",
+               -1: "Враг", -2: "Большой враг"}
+ 
+ 
+def relationship_with_dispositor(planet: str, sign: int, positions_signs: dict) -> dict | None:
+    """Five-fold relationship between a planet and the lord of the sign it occupies."""
+    if planet not in NATURAL_FRIENDS:
+        return None
+    lord = SIGN_LORDS[sign]
+    if lord == planet:
+        return {"dispositor": lord, "relation": "own sign", "relation_ru": "Свой знак"}
+    score = _natural_relation(planet, lord) + _temporal_relation(sign, positions_signs[lord])
+    score = max(-2, min(2, score))
+    return {"dispositor": lord,
+            "natural": COMPOUND[max(-1, min(1, _natural_relation(planet, lord)))],
+            "temporal": "friend" if _temporal_relation(sign, positions_signs[lord]) == 1 else "enemy",
+            "relation": COMPOUND[score], "relation_ru": COMPOUND_RU[score]}
