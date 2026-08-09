@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: jyotish-mcp
+    runtime: docker
+    plan: free
+    healthCheckPath: /mcp
+    envVars:
+      - key: MCP_TRANSPORT
+        value: http
